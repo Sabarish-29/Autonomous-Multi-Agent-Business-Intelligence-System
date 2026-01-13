@@ -320,7 +320,11 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://via.placeholder.com/250x80/667eea/ffffff?text=Autonomous Multi-Agent Business Intelligence System+2.0", use_container_width=True)
+        banner_url = os.getenv(
+            "APP_BANNER_URL",
+            "https://via.placeholder.com/250x80/667eea/ffffff?text=Autonomous%20Multi-Agent%20Business%20Intelligence%20System%202.0",
+        )
+        st.image(banner_url, width=250)
         
         st.markdown("---")
         

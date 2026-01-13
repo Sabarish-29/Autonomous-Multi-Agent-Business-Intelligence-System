@@ -92,6 +92,59 @@ def create_visualization_agent(llm: ChatGroq) -> Agent:
     )
 
 
+def create_scenario_architect_agent(llm: ChatGroq, business_glossary: Optional[Dict] = None) -> Agent:
+    """
+    Create Scenario Architect Agent for predictive simulations and what-if analysis.
+    
+    Args:
+        llm: Language model for the agent
+        business_glossary: Business glossary for identifying sensitive variables
+    
+    Returns:
+        CrewAI Agent configured for Monte Carlo simulation and scenario planning
+    """
+    glossary_context = ""
+    sensitive_variables = []
+    
+    if business_glossary:
+        # Extract price/demand sensitive columns from business terms
+        business_terms = business_glossary.get('business_terms', {})
+        for term, metadata in business_terms.items():
+            if isinstance(metadata, dict):
+                sensitivity = metadata.get('sensitivity', '').lower()
+                if 'price' in sensitivity or 'demand' in sensitivity or 'revenue' in sensitivity:
+                    sensitive_variables.append(term)
+        
+        glossary_context = f"""
+Business Context for Simulation:
+- Sensitive Variables: {', '.join(sensitive_variables) if sensitive_variables else 'price, demand, revenue'}
+- Column Aliases: {business_glossary.get('column_aliases', {})}
+- Use this glossary to identify which variables impact revenue, churn, or other KPIs
+"""
+    
+    return Agent(
+        role="Predictive Scenario Architect",
+        goal=(
+            "Generate Monte Carlo simulations and what-if scenarios to predict probable "
+            "outcomes under different business conditions. Create synthetic 'shadow data' "
+            "by applying hypothetical changes to key variables (e.g., price +10%, shipping -2 days) "
+            "and output probability distributions showing Low, Expected, and High outcomes."
+        ),
+        backstory=(
+            "You are a seasoned scenario planning expert with expertise in stochastic modeling "
+            "and Monte Carlo simulations. You understand how business variables interact and "
+            "can quantify uncertainty in forecasts. You use numpy for probabilistic distributions "
+            "and pandas for data manipulation, always validating assumptions and explaining "
+            "confidence intervals to stakeholders.\n\n"
+            f"{glossary_context}"
+        ),
+        llm=llm,
+        verbose=True,
+        allow_delegation=False,
+        max_iter=3
+    )
+
+
 class DataScienceTaskBuilder:
     """
     Builder for creating CrewAI tasks for various data science operations.
@@ -320,6 +373,65 @@ class DataScienceTaskBuilder:
             agent=agent,
             context=analysis_context or []
         )
+    
+    @staticmethod
+    def build_simulation_task(
+        agent: Agent,
+        dataframe_name: str,
+        hypothetical_variables: List[Dict[str, Any]],
+        target_column: str,
+        num_iterations: int = 1000,
+        context: Optional[List[Task]] = None
+    ) -> Task:
+        """
+        Create task for Monte Carlo simulation with hypothetical scenarios.
+        
+        Args:
+            agent: Scenario Architect agent
+            dataframe_name: Variable name of the base dataframe
+            hypothetical_variables: List of dicts with 'column', 'change_pct', 'change_type'
+                Example: [{'column': 'price', 'change_pct': 10, 'change_type': 'increase'},
+                         {'column': 'shipping_days', 'change_pct': -20, 'change_type': 'decrease'}]
+            target_column: Target column to predict (e.g., 'revenue', 'sales')
+            num_iterations: Number of Monte Carlo iterations
+            context: Previous tasks
+        
+        Returns:
+            CrewAI Task for Monte Carlo simulation
+        """
+        variables_desc = ", ".join([
+            f"{v['column']} {v['change_type']} by {abs(v['change_pct'])}%"
+            for v in hypothetical_variables
+        ])
+        
+        return Task(
+            description=(
+                f"Run Monte Carlo simulation on '{dataframe_name}' to predict impact on '{target_column}'.\n\n"
+                f"Hypothetical Changes: {variables_desc}\n"
+                f"Iterations: {num_iterations}\n\n"
+                "Steps:\n"
+                "1. Load base dataframe and calculate baseline target mean\n"
+                "2. For each hypothetical variable, generate normal distribution around the change percentage\n"
+                "   - Use numpy.random.normal(mean=change_pct, std=change_pct/3, size=num_iterations)\n"
+                "3. Create shadow dataframes for each iteration with modified values\n"
+                "4. Calculate target column for each iteration (apply business logic)\n"
+                "5. Aggregate results into percentiles: P10 (Low), P50 (Expected), P90 (High)\n"
+                "6. Store simulation results in 'result' variable\n\n"
+                "Use pandas for data manipulation and numpy for probabilistic sampling."
+            ),
+            expected_output=(
+                "A Python dictionary with:\n"
+                "- 'baseline': Original mean of target column\n"
+                "- 'scenarios': Dict with keys 'low' (P10), 'expected' (P50), 'high' (P90)\n"
+                "- 'distribution': Full array of simulated outcomes (for histogram)\n"
+                "- 'hypothetical_variables': Echo of input variables\n"
+                "- 'confidence_interval': 95% confidence interval [P2.5, P97.5]\n"
+                "- 'interpretation': Business insights about probable outcomes\n"
+                "- 'sensitivity_analysis': Which variable had the biggest impact"
+            ),
+            agent=agent,
+            context=context or []
+        )
 
 
 def generate_analysis_code(
@@ -448,6 +560,79 @@ result = {{
 }}
 """
     
+    elif analysis_type == "simulation":
+        target = kwargs.get("target_column", "revenue")
+        hypothetical_vars = kwargs.get("hypothetical_variables", [])
+        num_iterations = kwargs.get("num_iterations", 1000)
+        
+        # Generate code for applying hypothetical changes per iteration
+        change_code_lines = []
+        for var in hypothetical_vars:
+            col = var['column']
+            change_pct = var['change_pct']
+            change_code_lines.append(f"    # Simulate {col} change: {change_pct}% variation")
+            change_code_lines.append(f"    {col}_change = np.random.normal({change_pct}/100, abs({change_pct})/300)")
+            change_code_lines.append(f"    shadow_df['{col}'] = {dataframe_name}['{col}'].mean() * (1 + {col}_change)")
+        
+        changes_block = "\n".join(change_code_lines) if change_code_lines else "    pass  # No hypothetical variables specified"
+        
+        # Build sensitivity dict code
+        sensitivity_lines = []
+        for var in hypothetical_vars:
+            sensitivity_lines.append(f"sensitivity['{var['column']}'] = abs({var['change_pct']})")
+        sensitivity_block = "\n".join(sensitivity_lines) if sensitivity_lines else "pass"
+        
+        code_template = f"""
+import pandas as pd
+import numpy as np
+
+# Baseline calculation
+baseline = {dataframe_name}['{target}'].mean()
+
+# Monte Carlo simulation with {num_iterations} iterations
+np.random.seed(42)  # For reproducibility
+simulation_results = []
+
+for i in range({num_iterations}):
+    # Create shadow dataframe for this iteration
+    shadow_df = {dataframe_name}.copy()
+    
+{changes_block}
+    
+    # Calculate target column based on modified variables
+    # Assuming linear relationship (adjust business logic as needed)
+    simulated_target = shadow_df.select_dtypes(include=[np.number]).mean().sum() * (baseline / {dataframe_name}.select_dtypes(include=[np.number]).mean().sum())
+    simulation_results.append(simulated_target)
+
+# Calculate percentiles
+simulation_array = np.array(simulation_results)
+low = np.percentile(simulation_array, 10)
+expected = np.percentile(simulation_array, 50)
+high = np.percentile(simulation_array, 90)
+ci_low = np.percentile(simulation_array, 2.5)
+ci_high = np.percentile(simulation_array, 97.5)
+
+# Sensitivity analysis
+sensitivity = {{}}
+{sensitivity_block}
+most_sensitive = max(sensitivity.items(), key=lambda x: x[1])[0] if sensitivity else 'N/A'
+
+result = {{
+    'baseline': float(baseline),
+    'scenarios': {{
+        'low': float(low),
+        'expected': float(expected),
+        'high': float(high)
+    }},
+    'distribution': simulation_array.tolist(),
+    'hypothetical_variables': {hypothetical_vars},
+    'confidence_interval': [float(ci_low), float(ci_high)],
+    'interpretation': f'Expected outcome: {{{{expected:.2f}}}} (baseline: {{{{baseline:.2f}}}}, change: {{{{(expected-baseline)/baseline*100:.1f}}}}%)',
+    'sensitivity_analysis': f'Most sensitive variable: {{{{most_sensitive}}}}'
+}}
+"""
+        return code_template
+    
     else:
         raise ValueError(f"Unknown analysis type: {analysis_type}")
 
@@ -541,6 +726,91 @@ fig = go.Figure(data=go.Heatmap(
 ))
 
 fig.update_layout(title='{title}')
+visualization = fig.to_json()
+"""
+    
+    elif chart_type == "simulation_distribution":
+        # Monte Carlo simulation distribution histogram
+        distribution_var = kwargs.get("distribution_var", "distribution")
+        baseline_var = kwargs.get("baseline_var", "baseline")
+        scenarios_var = kwargs.get("scenarios_var", "scenarios")
+        
+        return f"""
+import plotly.graph_objects as go
+import numpy as np
+
+# Extract simulation data from result
+distribution = {distribution_var}
+baseline = {baseline_var}
+scenarios = {scenarios_var}
+
+# Create histogram of simulation results
+fig = go.Figure()
+
+# Add histogram
+fig.add_trace(go.Histogram(
+    x=distribution,
+    nbinsx=50,
+    name='Simulation Distribution',
+    marker_color='lightblue',
+    opacity=0.7
+))
+
+# Add vertical lines for key values
+fig.add_vline(x=baseline, line_dash="dash", line_color="red", 
+              annotation_text="Baseline", annotation_position="top")
+fig.add_vline(x=scenarios['low'], line_dash="dot", line_color="orange",
+              annotation_text="P10 (Low)", annotation_position="top left")
+fig.add_vline(x=scenarios['expected'], line_dash="solid", line_color="green",
+              annotation_text="P50 (Expected)", annotation_position="top")
+fig.add_vline(x=scenarios['high'], line_dash="dot", line_color="purple",
+              annotation_text="P90 (High)", annotation_position="top right")
+
+fig.update_layout(
+    title='{title}',
+    xaxis_title='Simulated Outcome',
+    yaxis_title='Frequency',
+    hovermode='x unified',
+    showlegend=True
+)
+
+visualization = fig.to_json()
+"""
+    
+    elif chart_type == "scenario_comparison":
+        # Bar chart comparing baseline vs scenarios
+        scenarios_var = kwargs.get("scenarios_var", "scenarios")
+        baseline_var = kwargs.get("baseline_var", "baseline")
+        
+        return f"""
+import plotly.graph_objects as go
+
+# Extract scenario data
+baseline = {baseline_var}
+scenarios = {scenarios_var}
+
+# Create comparison bar chart
+categories = ['Baseline', 'Low (P10)', 'Expected (P50)', 'High (P90)']
+values = [baseline, scenarios['low'], scenarios['expected'], scenarios['high']]
+colors = ['gray', 'orange', 'green', 'purple']
+
+fig = go.Figure(data=[
+    go.Bar(
+        x=categories,
+        y=values,
+        marker_color=colors,
+        text=[f'{{v:.2f}}' for v in values],
+        textposition='auto'
+    )
+])
+
+fig.update_layout(
+    title='{title}',
+    xaxis_title='Scenario',
+    yaxis_title='Predicted Value',
+    showlegend=False
+)
+
 visualization = fig.to_json()
 """
     
