@@ -1,0 +1,278 @@
+# Autonomous Multi-Agent Business Intelligence System - Business Glossary
+# Maps business terms to specific SQL logic and database constructs
+
+version: "1.0"
+description: "Semantic mapping layer for business terms to SQL constructs"
+
+# Business Term Definitions
+# Format: term_name -> SQL logic/column mapping
+business_terms:
+  
+  # User Metrics
+  active_user:
+    description: "User who has logged in within the last 30 days"
+    sql_logic: "last_login_date >= CURRENT_DATE - INTERVAL '30 days'"
+    related_tables:
+      - users
+    related_columns:
+      - last_login_date
+      - user_id
+    examples:
+      - "How many active users do we have?"
+      - "Show me all active users"
+  
+  churned_user:
+    description: "User who hasn't logged in for more than 90 days"
+    sql_logic: "last_login_date < CURRENT_DATE - INTERVAL '90 days'"
+    related_tables:
+      - users
+    related_columns:
+      - last_login_date
+      - user_id
+  
+  power_user:
+    description: "User with more than 100 sessions in the last month"
+    sql_logic: "session_count > 100 AND session_date >= CURRENT_DATE - INTERVAL '30 days'"
+    related_tables:
+      - users
+      - sessions
+    related_columns:
+      - user_id
+      - session_count
+      - session_date
+  
+  # Sales Metrics
+  revenue:
+    description: "Total monetary value from sales transactions"
+    sql_logic: "SUM(amount * quantity)"
+    aggregation: "SUM"
+    related_tables:
+      - transactions
+      - orders
+    related_columns:
+      - amount
+      - quantity
+      - total_price
+    examples:
+      - "What's our total revenue?"
+      - "Show revenue by region"
+  
+  gross_revenue:
+    description: "Total revenue before deductions"
+    sql_logic: "SUM(gross_amount)"
+    related_tables:
+      - transactions
+    related_columns:
+      - gross_amount
+  
+  net_revenue:
+    description: "Revenue after refunds and discounts"
+    sql_logic: "SUM(amount - COALESCE(refund_amount, 0) - COALESCE(discount_amount, 0))"
+    related_tables:
+      - transactions
+      - refunds
+    related_columns:
+      - amount
+      - refund_amount
+      - discount_amount
+  
+  average_order_value:
+    description: "Average value of orders"
+    sql_logic: "AVG(order_total)"
+    aggregation: "AVG"
+    related_tables:
+      - orders
+    related_columns:
+      - order_total
+      - amount
+  
+  # Product Metrics
+  top_selling_product:
+    description: "Products with highest sales quantity"
+    sql_logic: "ORDER BY SUM(quantity) DESC"
+    requires_grouping: true
+    group_by:
+      - product_id
+      - product_name
+    related_tables:
+      - products
+      - order_items
+    related_columns:
+      - product_id
+      - product_name
+      - quantity
+  
+  out_of_stock:
+    description: "Products with zero inventory"
+    sql_logic: "stock_quantity = 0 OR stock_quantity IS NULL"
+    related_tables:
+      - inventory
+      - products
+    related_columns:
+      - stock_quantity
+      - product_id
+  
+  # Time Period Definitions
+  this_month:
+    description: "Current calendar month"
+    sql_logic: "DATE_TRUNC('month', CURRENT_DATE)"
+    time_filter: true
+  
+  last_month:
+    description: "Previous calendar month"
+    sql_logic: "DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')"
+    time_filter: true
+  
+  this_quarter:
+    description: "Current fiscal quarter"
+    sql_logic: "DATE_TRUNC('quarter', CURRENT_DATE)"
+    time_filter: true
+  
+  year_to_date:
+    description: "From start of year to today"
+    sql_logic: "DATE_TRUNC('year', CURRENT_DATE)"
+    time_filter: true
+    examples:
+      - "Show year to date revenue"
+      - "YTD sales by product"
+  
+  # Customer Segments
+  new_customer:
+    description: "Customer with first purchase in last 30 days"
+    sql_logic: "first_purchase_date >= CURRENT_DATE - INTERVAL '30 days'"
+    related_tables:
+      - customers
+    related_columns:
+      - first_purchase_date
+      - customer_id
+  
+  vip_customer:
+    description: "Customer with lifetime value > $10,000"
+    sql_logic: "lifetime_value > 10000"
+    related_tables:
+      - customers
+    related_columns:
+      - lifetime_value
+      - customer_id
+  
+  # Geographic Terms
+  region:
+    description: "Geographic sales region"
+    related_tables:
+      - stores
+      - customers
+    related_columns:
+      - region
+      - region_name
+      - geographic_region
+  
+  domestic:
+    description: "Within the United States"
+    sql_logic: "country = 'US' OR country = 'USA'"
+    related_tables:
+      - customers
+      - stores
+    related_columns:
+      - country
+  
+  international:
+    description: "Outside the United States"
+    sql_logic: "country NOT IN ('US', 'USA')"
+    related_tables:
+      - customers
+      - stores
+    related_columns:
+      - country
+
+# Column Aliases
+# Maps common business language to actual column names
+column_aliases:
+  sales: ["amount", "revenue", "total_sales", "sales_amount"]
+  customer: ["user_id", "client_id", "customer_id"]
+  date: ["transaction_date", "order_date", "sale_date", "created_at"]
+  product: ["product_name", "item_name", "sku"]
+  quantity: ["qty", "units_sold", "quantity_sold"]
+  price: ["unit_price", "price_per_unit", "amount"]
+
+# Table Relationships
+# Helps understand how tables connect
+relationships:
+  - parent: customers
+    child: orders
+    join_key: customer_id
+    relationship_type: "one_to_many"
+  
+  - parent: orders
+    child: order_items
+    join_key: order_id
+    relationship_type: "one_to_many"
+  
+  - parent: products
+    child: order_items
+    join_key: product_id
+    relationship_type: "one_to_many"
+  
+  - parent: users
+    child: sessions
+    join_key: user_id
+    relationship_type: "one_to_many"
+
+# Common Query Patterns
+# Pre-defined patterns for frequent queries
+query_patterns:
+  
+  top_n_by_metric:
+    description: "Retrieve top N items ranked by a metric"
+    template: |
+      SELECT {dimension}, {metric}
+      FROM {table}
+      GROUP BY {dimension}
+      ORDER BY {metric} DESC
+      LIMIT {n}
+    example_mappings:
+      dimension: ["product_name", "customer_name", "region"]
+      metric: ["SUM(amount)", "COUNT(*)", "AVG(score)"]
+  
+  time_series_aggregation:
+    description: "Aggregate metrics over time periods"
+    template: |
+      SELECT DATE_TRUNC('{period}', {date_column}) as period,
+             {aggregation}
+      FROM {table}
+      WHERE {date_column} >= {start_date}
+      GROUP BY period
+      ORDER BY period
+    example_mappings:
+      period: ["day", "week", "month", "quarter", "year"]
+      aggregation: ["SUM(amount)", "COUNT(*)", "AVG(value)"]
+  
+  comparison_current_vs_previous:
+    description: "Compare current period to previous period"
+    template: |
+      WITH current_period AS (
+        SELECT {metric} FROM {table}
+        WHERE {date_column} >= {current_start}
+      ),
+      previous_period AS (
+        SELECT {metric} FROM {table}
+        WHERE {date_column} BETWEEN {previous_start} AND {previous_end}
+      )
+      SELECT 
+        current_period.{metric} as current_value,
+        previous_period.{metric} as previous_value,
+        ((current_period.{metric} - previous_period.{metric}) / previous_period.{metric}) * 100 as percent_change
+      FROM current_period, previous_period
+
+# Validation Rules
+validation_rules:
+  - rule: "Revenue queries must include date filters"
+    applies_to: ["revenue", "sales", "transactions"]
+    severity: "warning"
+  
+  - rule: "Customer PII requires explicit authorization"
+    applies_to: ["email", "phone", "address"]
+    severity: "error"
+  
+  - rule: "Aggregations require GROUP BY clause"
+    applies_to: ["SUM", "AVG", "COUNT"]
+    severity: "error"

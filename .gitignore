@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Data
+data/sample/*.sqlite
+data/embeddings/
+data/schemas/*.json
+!data/schemas/.gitkeep
+data/schema_library/
+
+# Logs
+*.log
+logs/
+
+# Generated reports / exports
+reports/
+exports/
+
+# Binary documents (usually generated)
+*.pdf
+*.docx
+*.pptx
+
+# ChromaDB
+chroma/
+*.chroma
+
+# Models
+models/
+*.pt
+*.pth
+*.bin
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Secrets
+secrets/
+*.pem
+*.key
+
+# Temp
+tmp/
+temp/
+*.tmp
