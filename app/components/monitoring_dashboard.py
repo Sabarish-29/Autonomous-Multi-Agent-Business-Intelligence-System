@@ -19,13 +19,14 @@ from plotly.subplots import make_subplots
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
 import time
+import os
 
 
 class MonitoringDashboard:
     """Real-time monitoring dashboard component"""
     
-    def __init__(self, api_base_url: str = "http://localhost:8000"):
-        self.api_base_url = api_base_url
+    def __init__(self, api_base_url: str | None = None):
+        self.api_base_url = (api_base_url or os.getenv("API_BASE_URL", "http://127.0.0.1:8000")).rstrip("/")
     
     def render(self):
         """Render the complete monitoring dashboard"""

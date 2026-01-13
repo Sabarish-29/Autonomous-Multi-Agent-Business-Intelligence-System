@@ -16,7 +16,7 @@ Usage:
     streamlit run app/streamlit_ui.py
 
 Requirements:
-    - FastAPI backend running on http://localhost:8000
+    - FastAPI backend running on http://127.0.0.1:8000 (or set API_BASE_URL)
     - All Phase 4 components installed
 """
 
@@ -24,6 +24,7 @@ import streamlit as st
 import requests
 import json
 import plotly.graph_objects as go
+import os
 from datetime import datetime
 import time
 import asyncio
@@ -117,7 +118,7 @@ st.markdown("""
 # Configuration
 # ============================================================================
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 
 # Initialize session state
 if 'query_history' not in st.session_state:
@@ -131,6 +132,9 @@ if 'alerts' not in st.session_state:
 
 if 'show_agent_trace' not in st.session_state:
     st.session_state.show_agent_trace = False
+
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = "💬 Query"
 
 # ============================================================================
 # Helper Functions
@@ -364,18 +368,29 @@ def main():
             st.caption("No recent alerts")
         
         if st.button("📊 View Full Dashboard", use_container_width=True):
-            st.session_state.active_tab = "monitoring"
+            st.session_state.active_tab = "📊 Monitoring"
+            st.rerun()
         
         st.markdown("---")
         st.caption("Autonomous Multi-Agent Business Intelligence System v2.0.4")
     
-    # Main Content Tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["💬 Query", "📊 Monitoring", "📚 History", "⚙️ Settings"])
+    # Main Content Navigation (controllable; unlike st.tabs)
+    tab_options = ["💬 Query", "📊 Monitoring", "📚 History", "⚙️ Settings"]
+    if st.session_state.active_tab not in tab_options:
+        st.session_state.active_tab = tab_options[0]
+
+    active_tab = st.radio(
+        "Navigation",
+        tab_options,
+        horizontal=True,
+        key="active_tab",
+        label_visibility="collapsed",
+    )
     
     # ========================================================================
     # Tab 1: Query Interface
     # ========================================================================
-    with tab1:
+    if active_tab == "💬 Query":
         st.header("Ask Autonomous Multi-Agent Business Intelligence System")
         
         # Query Input
@@ -526,7 +541,7 @@ def main():
     # ========================================================================
     # Tab 2: Monitoring Dashboard
     # ========================================================================
-    with tab2:
+    elif active_tab == "📊 Monitoring":
         st.header("📊 Real-time Monitoring Dashboard")
         
         dashboard = MonitoringDashboard(API_BASE_URL)
@@ -535,7 +550,7 @@ def main():
     # ========================================================================
     # Tab 3: Query History
     # ========================================================================
-    with tab3:
+    elif active_tab == "📚 History":
         st.header("📚 Query History")
         
         if st.session_state.query_history:
@@ -552,7 +567,7 @@ def main():
     # ========================================================================
     # Tab 4: Settings
     # ========================================================================
-    with tab4:
+    elif active_tab == "⚙️ Settings":
         st.header("⚙️ Settings")
         
         st.subheader("🔌 API Configuration")
