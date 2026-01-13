@@ -63,8 +63,17 @@ class LibrarianAgent:
                 name="database_schemas",
                 metadata={"description": "Database table schemas with metadata"}
             )
+            
+            # Phase 2: Initialize unstructured documents collection
+            self.unstructured_collection = self.client.get_or_create_collection(
+                name="unstructured_docs",
+                metadata={"description": "Internal business documents and unstructured knowledge"}
+            )
 
-            logger.info(f"Librarian Agent initialized with {self.schema_collection.count()} schemas")
+            logger.info(
+                f"Librarian Agent initialized with {self.schema_collection.count()} schemas "
+                f"and {self.unstructured_collection.count()} document chunks"
+            )
 
         except Exception as e:
             logger.error(f"Failed to initialize Librarian Agent: {e}")
@@ -343,6 +352,122 @@ class LibrarianAgent:
         context_parts.append("=== END SCHEMAS ===")
         
         return "\n".join(context_parts)
+    
+    def retrieve_hybrid_context(
+        self,
+        query: str,
+        top_k_sql: int = 3,
+        top_k_docs: int = 5
+    ) -> str:
+        """
+        Phase 2: Hybrid retrieval combining SQL schemas and business documents.
+        
+        Performs semantic search across both database schemas and unstructured
+        documents, returning a unified context string for LLM consumption.
+        
+        Args:
+            query: User's natural language query
+            top_k_sql: Number of relevant SQL table schemas to retrieve
+            top_k_docs: Number of relevant document snippets to retrieve
+            
+        Returns:
+            Formatted hybrid context string with database and document sections
+        """
+        context_parts = []
+        
+        # Section 1: Database Schema Context
+        try:
+            sql_schemas = self.retrieve_relevant_schemas(query, top_k=top_k_sql)
+            
+            if sql_schemas:
+                context_parts.append("### DATABASE SCHEMA CONTEXT\n")
+                
+                for idx, schema in enumerate(sql_schemas, 1):
+                    meta = schema.get('metadata', {})
+                    table_name = meta.get('table_name', 'unknown')
+                    columns = meta.get('column_names', [])
+                    
+                    if isinstance(columns, str):
+                        columns = [c.strip() for c in columns.split(',') if c.strip()]
+                    
+                    context_parts.append(f"{idx}. Table: {table_name}")
+                    context_parts.append(f"   Columns: {', '.join(columns) if columns else 'N/A'}")
+                    
+                    # Add schema definition snippet
+                    doc = schema.get('document', '')
+                    if 'Schema:' in doc:
+                        schema_def = doc.split('Schema:')[1].split('Columns:')[0].strip()
+                        # Truncate long definitions
+                        if len(schema_def) > 150:
+                            schema_def = schema_def[:150] + "..."
+                        context_parts.append(f"   Definition: {schema_def}")
+                    
+                    context_parts.append("")  # Blank line
+            else:
+                context_parts.append("### DATABASE SCHEMA CONTEXT\n")
+                context_parts.append("No relevant database schemas found.\n")
+                
+        except Exception as e:
+            logger.error(f"Failed to retrieve SQL schemas: {e}")
+            context_parts.append("### DATABASE SCHEMA CONTEXT\n")
+            context_parts.append(f"Error retrieving schemas: {str(e)}\n")
+        
+        # Section 2: Business Document Context
+        try:
+            if not self.unstructured_collection:
+                context_parts.append("### BUSINESS DOCUMENT CONTEXT\n")
+                context_parts.append("Unstructured document collection not initialized.\n")
+            else:
+                doc_count = self.unstructured_collection.count()
+                
+                if doc_count == 0:
+                    context_parts.append("### BUSINESS DOCUMENT CONTEXT\n")
+                    context_parts.append("No business documents indexed.\n")
+                else:
+                    # Query unstructured documents
+                    doc_results = self.unstructured_collection.query(
+                        query_texts=[query],
+                        n_results=min(top_k_docs, doc_count)
+                    )
+                    
+                    if doc_results['documents'] and doc_results['documents'][0]:
+                        context_parts.append("### BUSINESS DOCUMENT CONTEXT\n")
+                        
+                        for idx, doc_text in enumerate(doc_results['documents'][0], 1):
+                            metadata = doc_results['metadatas'][0][idx - 1] if doc_results['metadatas'] else {}
+                            distance = doc_results['distances'][0][idx - 1] if doc_results.get('distances') else 0
+                            relevance = round(1 - distance, 3)
+                            
+                            source_file = metadata.get('source_file', 'unknown')
+                            chunk_idx = metadata.get('chunk_index', '0')
+                            
+                            context_parts.append(f"{idx}. Source: {source_file} (chunk {chunk_idx})")
+                            context_parts.append(f"   Relevance: {relevance}")
+                            
+                            # Truncate long snippets
+                            snippet = doc_text.strip()
+                            if len(snippet) > 300:
+                                snippet = snippet[:300] + "..."
+                            context_parts.append(f"   Content: {snippet}")
+                            context_parts.append("")  # Blank line
+                    else:
+                        context_parts.append("### BUSINESS DOCUMENT CONTEXT\n")
+                        context_parts.append("No relevant documents found.\n")
+                        
+        except Exception as e:
+            logger.error(f"Failed to retrieve documents: {e}")
+            context_parts.append("### BUSINESS DOCUMENT CONTEXT\n")
+            context_parts.append(f"Error retrieving documents: {str(e)}\n")
+        
+        # Combine all sections
+        hybrid_context = "\n".join(context_parts)
+        
+        logger.info(
+            f"Generated hybrid context: {len(sql_schemas) if 'sql_schemas' in locals() else 0} schemas, "
+            f"{len(doc_results['documents'][0]) if 'doc_results' in locals() and doc_results['documents'] else 0} documents"
+        )
+        
+        return hybrid_context
     
     def reset_collection(self) -> bool:
         """
