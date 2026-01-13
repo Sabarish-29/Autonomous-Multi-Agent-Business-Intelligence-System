@@ -49,7 +49,7 @@ REPLACEMENTS = [
     ("DataGenie AI", "Autonomous Multi-Agent Business Intelligence System"),
     ("DataGenie 2.0", "Autonomous Multi-Agent Business Intelligence System"),
     ("DataGenie-AI", "autonomous-multi-agent-business-intelligence-system"),
-    ("DataGenie Team", "Sabarish-29"),
+    ("DataGenie Team", "YOUR_NAME"),
     ("DATAGENIE 2.0", "AUTONOMOUS MULTI-AGENT BUSINESS INTELLIGENCE SYSTEM"),
     ("datagenie-ai", "autonomous-multi-agent-bi-system"),
     ("sql generator_AI-main", "autonomous-multi-agent-bi-system"),

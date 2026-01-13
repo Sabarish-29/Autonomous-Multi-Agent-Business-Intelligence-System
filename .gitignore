@@ -38,6 +38,9 @@ env/
 .env.local
 .env.*.local
 
+# Streamlit
+.streamlit/secrets.toml
+
 # Data
 data/sample/*.sqlite
 data/embeddings/
@@ -48,6 +51,11 @@ data/schema_library/
 # Logs
 *.log
 logs/
+
+# Local databases
+*.sqlite3
+*.db
+*.duckdb
 
 # Generated reports / exports
 reports/

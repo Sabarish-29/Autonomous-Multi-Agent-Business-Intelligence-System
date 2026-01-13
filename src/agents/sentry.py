@@ -13,7 +13,7 @@ Features:
 - Root Cause Analysis task triggering
 - Configurable metrics and thresholds
 
-Author: Sabarish-29
+Author: YOUR_NAME
 Version: 2.0.4
 """
 

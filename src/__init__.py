@@ -14,4 +14,4 @@ Technologies:
 """
 
 __version__ = "1.0.0"
-__author__ = "Sabarish-29"
+__author__ = "YOUR_NAME"

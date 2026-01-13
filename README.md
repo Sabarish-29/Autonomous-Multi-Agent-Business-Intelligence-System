@@ -364,7 +364,7 @@ Proprietary.
 - **API Reference**: http://localhost:8000/docs (Swagger UI)
 - **Deployment Guide**: `docs/DEPLOYMENT.md`
 - **Agent Details**: `src/agents/` folder
-- **Email**: sabarishsureshofficial@gmail.com
+- **Email**: your.email@example.com
 
 ---
 

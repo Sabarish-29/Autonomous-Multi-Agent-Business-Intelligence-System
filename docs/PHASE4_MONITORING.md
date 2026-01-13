@@ -778,7 +778,7 @@ Phase 4 is modular and extensible. Key extension points:
 
 ---
 
-**Built with ❤️ by Sabarish-29**
+**Built with ❤️ by YOUR_NAME**
 
 *Phase 4 Version: 2.0.4*
 *Last Updated: January 2026*

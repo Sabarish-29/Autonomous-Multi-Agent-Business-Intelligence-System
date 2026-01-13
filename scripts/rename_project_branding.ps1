@@ -25,7 +25,7 @@ $repls = @(
   @{ Old = 'DataGenie AI';   New = 'Autonomous Multi-Agent Business Intelligence System' },
   @{ Old = 'DataGenie 2.0';  New = 'Autonomous Multi-Agent Business Intelligence System' },
   @{ Old = 'DataGenie-AI';   New = 'autonomous-multi-agent-business-intelligence-system' },
-  @{ Old = 'DataGenie Team'; New = 'Sabarish-29' },
+  @{ Old = 'DataGenie Team'; New = 'YOUR_NAME' },
   @{ Old = 'DATAGENIE 2.0';  New = 'AUTONOMOUS MULTI-AGENT BUSINESS INTELLIGENCE SYSTEM' },
   @{ Old = 'datagenie-ai';   New = 'autonomous-multi-agent-bi-system' },
   @{ Old = 'sql generator_AI-main'; New = 'autonomous-multi-agent-bi-system' }

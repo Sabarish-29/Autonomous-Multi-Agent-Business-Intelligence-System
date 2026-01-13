@@ -14,7 +14,7 @@ Features:
 - Rate limiting and error handling
 - Multiple search modes (news, general, academic)
 
-Author: Sabarish-29
+Author: YOUR_NAME
 Version: 2.0.4
 """
 
