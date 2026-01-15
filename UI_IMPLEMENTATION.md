@@ -39,7 +39,7 @@
 - Exports AgentTraceViewer and MonitoringDashboard
 - Version tracking
 
-#### 5. **UI Documentation** - `app/README.md`
+#### 5. **UI Documentation** - `README.md`
 - Complete usage guide
 - Component documentation
 - API integration details

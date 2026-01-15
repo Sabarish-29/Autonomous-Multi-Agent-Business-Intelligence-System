@@ -1,98 +1,169 @@
 # Autonomous Multi-Agent Business Intelligence System
 
-> AI-powered Business Intelligence assistant with a 6-agent agentic pipeline that transforms natural language queries into SQL, validates them for safety, auto-corrects errors, and generates actionable business insights.
+AI-powered BI assistant that turns natural-language questions into SQL, runs optional analytics and external research, streams proactive anomaly alerts, and can generate executive-friendly outputs.
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)
-![Multi-Agent](https://img.shields.io/badge/Multi--Agent-6%20Agents-purple.svg)
-![Groq](https://img.shields.io/badge/Groq-LLM-orange.svg)
-![License](https://img.shields.io/badge/License-Proprietary-lightgrey.svg)
+This repo contains two UIs:
+- A general Streamlit dashboard (recommended for most users): `app/streamlit_ui.py`
+- An “Executive Boardroom” dashboard with a Legacy Mode toggle (v2 vs v3): `src/ui/boardroom_app.py`
 
-## 🎯 Key Features
+## What’s in this repo (verified)
 
-- **6-Agent Agentic Pipeline**: Planner, Validator, Corrector, Memory, Insight, Orchestrator
-- **Natural Language to SQL**: Context-aware SQL generation with safety validation
-- **Self-Correcting SQL**: Automatic error detection and correction with transparency
-- **Business Insights**: AI-generated summaries, key points, and recommendations
-- **NLP Pipeline**: spaCy NER (87% accuracy) + BERT intent classification
-- **RAG Architecture**: ChromaDB + Groq API for intelligent context retrieval
-- **Query Memory**: Stores and recalls similar past queries (30% threshold)
-- **Safety First**: Blocks dangerous SQL (INSERT, UPDATE, DELETE, DROP, ALTER, etc.)
-- **Streamlit UI**: Real-time query visualization with agent plan transparency
+### Backend APIs
 
-## 🏗️ Architecture
+**Phase 4 API (recommended for the dashboards)**
+- Entry: `src.api.main_crewai:app`
+- Includes:
+    - `POST /query`
+    - `POST /query/analytics`
+    - `POST /query/research`
+    - `GET /alerts/recent`
+    - `POST /alerts/check/{metric_name}`
+    - `WS /ws/alerts`
+    - `GET /health`
 
-### 6-Agent Agentic Pipeline
+**Core API (alternative / lighter orchestration)**
+- Entry: `src.api.main:app`
+- Includes `POST /query` with optional `agentic` routing.
 
-```
-User Query
-    ↓
-[1] MEMORY AGENT ──→ Recalls similar past queries from history
-    ↓
-[2] PLANNER AGENT ──→ Analyzes intent, extracts metrics/dimensions
-    ↓                  Builds step-by-step analytical plan
-[3] GENERATOR ────→ Core SQL generation from plan
-    ↓
-[4] VALIDATOR ────→ Safety validation (blocks dangerous operations)
-    ↓
-[5] CORRECTOR ────→ Auto-fixes SQL errors (with transparency)
-    ↓
-[6] INSIGHT AGENT ─→ Generates business summaries & recommendations
-    ↓
-[7] MEMORY AGENT ──→ Stores successful query-SQL pair for future recall
-    ↓
-Response (with plan, insights, and correction metadata)
-```
+### Frontend UIs
 
-### System Architecture
+**Streamlit Dashboard**
+- Entry: `app/streamlit_ui.py`
+- Tabs for querying, monitoring, history, settings.
+- Uses the Phase 4 API endpoints above.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│      Autonomous Multi-Agent Business Intelligence System              │
-├─────────────────────────────────────────────────────────────────────┤
-│  Frontend Layer                                                      │
-│  ┌──────────────────────┐                                            │
-│  │ Streamlit UI (8501)  │                                            │
-│  │ • Query Input        │                                            │
-│  │ • Real-time Results  │                                            │
-│  │ • 4-Tab Dashboard    │                                            │
-│  └──────────────────────┘                                            │
-├─────────────────────────────────────────────────────────────────────┤
-│  API Layer (FastAPI on 8000)                                         │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐                 │
-│  │ /query       │ │ /health      │ │ /docs        │                 │
-│  │ (agentic)    │ │ (status)     │ │ (Swagger UI) │                 │
-│  └──────────────┘ └──────────────┘ └──────────────┘                 │
-├─────────────────────────────────────────────────────────────────────┤
-│  Agent Orchestrator Pipeline                                         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-│  │ Memory   │→ │ Planner  │→ │Generator │→ │Validator │             │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘             │
-│       ↓             ↓              ↓              ↓                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-│  │ Memory   │← │ Insight  │← │Corrector │← (if errors)              │
-│  └──────────┘  └──────────┘  └──────────┘                           │
-├─────────────────────────────────────────────────────────────────────┤
-│  Processing Components                                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-│  │ NER      │  │ Intent   │  │ Validator│  │ RAG      │             │
-│  │Extractor │  │Classifier│  │(Safety)  │  │Retriever │             │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘             │
-├─────────────────────────────────────────────────────────────────────┤
-│  LLM Layer                                                           │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │ Groq API (llama-3.3-70b-versatile) - Fast & Efficient        │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────────┤
-│  Data Layer                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                           │
-│  │ ChromaDB │  │ SQLite   │  │ Memory   │                           │
-│  │ (Vector) │  │ (Sample) │  │ Storage  │                           │
-│  └──────────┘  └──────────┘  └──────────┘                           │
-└─────────────────────────────────────────────────────────────────────┘
+**Executive Boardroom (Legacy Mode)**
+- Entry: `src/ui/boardroom_app.py`
+- Sidebar “Operation Mode”:
+    - **Simple Query (v2.0)**: fast report layout, no alerts/voice
+    - **Autonomous Briefing (v3.0)**: executive layout + briefing
+
+## Requirements
+
+- Python **3.11+** (see `pyproject.toml`)
+- Windows / macOS / Linux
+
+## Setup
+
+### 1) Create and activate a virtual environment
+
+Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+& .\.venv\Scripts\Activate.ps1
 ```
 
-## 📋 Requirements
+macOS/Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 2) Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Optional (recommended if you use the NLP components):
+
+```bash
+python -m spacy download en_core_web_sm
+```
+
+### 3) Configure environment
+
+Create `.env` in the repo root.
+
+Required:
+- `GROQ_API_KEY` (Phase 4 backend uses this at startup)
+
+Optional:
+- `OPENAI_API_KEY` (reasoning/critic; can be disabled)
+- `TAVILY_API_KEY` (external research; research mode degrades gracefully if unset)
+
+Flags:
+- `DATAGENIE_DISABLE_OPENAI=1` to force OpenAI off
+- `DATAGENIE_TEST_MODE=1` to reduce side effects during tests
+
+### 4) (Optional) Initialize sample data
+
+These scripts exist in `scripts/` and can be used to seed the local demo data:
+
+```bash
+python scripts/create_sample_data.py
+python scripts/init_vector_store.py
+```
+
+## Run
+
+### Option A: Run the recommended Phase 4 backend + Streamlit Dashboard
+
+Terminal 1 (backend):
+
+```bash
+python -m uvicorn src.api.main_crewai:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Terminal 2 (frontend):
+
+```bash
+python -m streamlit run app/streamlit_ui.py --server.port 8501 --server.address 127.0.0.1
+```
+
+Open:
+- UI: http://127.0.0.1:8501
+- API health: http://127.0.0.1:8000/health
+- API docs: http://127.0.0.1:8000/docs
+
+### Option B: Run the Executive Boardroom (Legacy Mode toggle)
+
+Backend (same as above):
+
+```bash
+python -m uvicorn src.api.main_crewai:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Frontend:
+
+```bash
+python -m streamlit run src/ui/boardroom_app.py --server.port 8501
+```
+
+### Option C: One-command launcher
+
+This starts `src.api.main_crewai:app` and `app/streamlit_ui.py`:
+
+```bash
+python scripts/launch_datagenie.py
+```
+
+## Troubleshooting
+
+### Backend won’t import `src`
+
+Run from the repo root (the folder containing `src/`). If you launch uvicorn from another working directory, Python may not resolve imports.
+
+### Missing spaCy model
+
+If you see spaCy errors about `en_core_web_sm`, install it:
+
+```bash
+python -m spacy download en_core_web_sm
+```
+
+### Research mode has limited results
+
+Set `TAVILY_API_KEY` to enable external research in `POST /query/research`.
+
+## Tests
+
+```bash
+pytest
+```
+
 
 ### Hardware (Minimum)
 - **CPU**: Intel Core i7 (11th gen or later) or AMD equivalent

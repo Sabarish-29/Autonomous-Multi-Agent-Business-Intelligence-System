@@ -56,29 +56,38 @@ def check_dependencies():
 def check_environment():
     """Check environment variables"""
     print("\n🔑 Checking environment variables...")
-    
-    required_vars = {
-        'GROQ_API_KEY': 'Groq API (Fast LLM)',
-        'OPENAI_API_KEY': 'OpenAI API (Reasoning)',
-        'TAVILY_API_KEY': 'Tavily API (Research)'
-    }
-    
-    missing = []
-    
-    for var, description in required_vars.items():
-        if os.getenv(var):
-            print(f"  ✅ {description}")
-        else:
-            print(f"  ⚠️  {description} - NOT SET")
-            missing.append(var)
-    
-    if missing:
-        print(f"\n⚠️  Missing environment variables: {', '.join(missing)}")
-        print("Create a .env file with these variables")
-        print("Note: System will work with limited functionality")
+
+    # Match actual runtime behavior:
+    # - GROQ_API_KEY is required for the Phase 4/CrewAI backend startup
+    # - OPENAI_API_KEY is optional (can be disabled via DATAGENIE_DISABLE_OPENAI=1)
+    # - TAVILY_API_KEY is optional (research mode degrades gracefully)
+    groq = os.getenv("GROQ_API_KEY")
+    openai = os.getenv("OPENAI_API_KEY")
+    tavily = os.getenv("TAVILY_API_KEY")
+    disable_openai = os.getenv("DATAGENIE_DISABLE_OPENAI") == "1"
+
+    if groq:
+        print("  ✅ Groq API (Fast LLM)")
     else:
-        print("✅ All environment variables set")
-    
+        print("  ❌ Groq API (Fast LLM) - NOT SET (required for backend)")
+
+    if disable_openai:
+        print("  ✅ OpenAI disabled (DATAGENIE_DISABLE_OPENAI=1)")
+    elif openai:
+        print("  ✅ OpenAI API (Reasoning) (optional)")
+    else:
+        print("  ⚠️  OpenAI API (Reasoning) - NOT SET (optional)")
+
+    if tavily:
+        print("  ✅ Tavily API (Research) (optional)")
+    else:
+        print("  ⚠️  Tavily API (Research) - NOT SET (optional)")
+
+    if not groq:
+        print("\n⚠️  GROQ_API_KEY is required to start the Phase 4 backend.")
+        print("Create a .env file (or export env vars) and set GROQ_API_KEY.")
+        return False
+
     return True
 
 
@@ -171,7 +180,8 @@ def main():
     if not args.skip_checks:
         if not check_dependencies():
             sys.exit(1)
-        check_environment()
+        if not check_environment():
+            sys.exit(1)
     
     processes = []
     

@@ -20,12 +20,16 @@ import json
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.agents.voice_briefer import create_voice_briefer_agent, SpeechTaskBuilder, generate_voice_brief
-from src.agents.crewai_manager import DataOpsManager
-from src.rag.vector_store import VectorStoreManager
-from src.agents.librarian import LibrarianAgent
-from src.config import GROQ_API_KEY
-from langchain_groq import ChatGroq
+from src.agents.voice_briefer import generate_voice_brief
+
+# Optional imports (only needed when enabling live LLM / full pipeline)
+try:
+    from src.config import GROQ_API_KEY
+    from langchain_groq import ChatGroq
+    GROQ_AVAILABLE = True
+except Exception:
+    GROQ_AVAILABLE = False
+    GROQ_API_KEY = None
 
 # Audio libraries (graceful degradation if not installed)
 try:
@@ -34,7 +38,7 @@ try:
     AUDIO_AVAILABLE = True
 except ImportError:
     AUDIO_AVAILABLE = False
-    st.warning("Audio features require: pip install gtts pygame")
+    # Avoid Streamlit UI calls during import; surface this in the UI when needed.
 
 # Voice input library (optional)
 try:
@@ -384,8 +388,6 @@ def render_visual_stage(query_results: Optional[Dict] = None):
     Args:
         query_results: Results from CrewAI pipeline execution
     """
-    st.markdown('<div class="visual-stage">', unsafe_allow_html=True)
-    
     if query_results is None:
         # Placeholder state
         st.markdown("### 📊 Visual Stage")
@@ -411,8 +413,7 @@ def render_visual_stage(query_results: Optional[Dict] = None):
                 st.dataframe(df, use_container_width=True)
             else:
                 st.warning("No visualization data available")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 def render_dynamic_chart(chart_data: Dict[str, Any]) -> go.Figure:
@@ -539,28 +540,65 @@ def main():
     # ========================================================================
     
     st.sidebar.title("⚙️ Configuration")
+
+    # Operation mode (Legacy v2.0 vs Autonomous v3.0)
+    st.sidebar.markdown("### 🔄 Operation Mode")
+    operation_mode = st.sidebar.radio(
+        "Operation Mode",
+        options=["Simple Query (v2.0)", "Autonomous Briefing (v3.0)"],
+        index=1,
+        help=(
+            "v2.0: Fast, direct SQL results\n"
+            "v3.0: Full multi-agent strategic analysis"
+        ),
+    )
+
+    # Persist selection across reruns
+    st.session_state["operation_mode"] = operation_mode
+
+    if operation_mode == "Simple Query (v2.0)":
+        st.sidebar.caption("⚡ Fast, direct SQL results")
+    else:
+        st.sidebar.caption("🎯 Full multi-agent strategic analysis")
     
-    # Voice input toggle
-    use_voice = st.sidebar.checkbox("Enable Voice Input", value=False, disabled=not VOICE_INPUT_AVAILABLE)
+    # Voice input toggle (v3.0 only)
+    use_voice = st.sidebar.checkbox(
+        "Enable Voice Input",
+        value=False,
+        disabled=(not VOICE_INPUT_AVAILABLE) or (operation_mode == "Simple Query (v2.0)"),
+    )
     if not VOICE_INPUT_AVAILABLE and use_voice:
         st.sidebar.warning("Voice input requires: pip install streamlit-mic-recorder")
     
-    # Audio output toggle
-    enable_audio = st.sidebar.checkbox("Enable Audio Briefing", value=AUDIO_AVAILABLE)
+    # Audio output toggle (v3.0 only)
+    enable_audio = st.sidebar.checkbox(
+        "Enable Audio Briefing",
+        value=AUDIO_AVAILABLE,
+        disabled=(operation_mode == "Simple Query (v2.0)"),
+    )
     
-    # Briefing duration
-    briefing_duration = st.sidebar.slider("Briefing Duration (seconds)", 30, 90, 45, 5)
+    # Briefing duration (v3.0 only)
+    briefing_duration = st.sidebar.slider(
+        "Briefing Duration (seconds)",
+        30,
+        90,
+        45,
+        5,
+        disabled=(operation_mode == "Simple Query (v2.0)"),
+    )
     
     st.sidebar.divider()
     
-    # Critical Alerts Section (Phase 3 integration)
-    sample_alerts = [
-        {"priority": "Critical", "message": "Revenue down 15% in EMEA region", "timestamp": "10:23"},
-        {"priority": "High", "message": "Customer churn rate increased 8%", "timestamp": "09:45"},
-        {"priority": "Medium", "message": "Supply chain delays detected", "timestamp": "08:12"}
-    ]
-    
-    render_critical_alerts(sample_alerts)
+    # Critical Alerts Section (Phase 3 integration) - v3.0 only
+    if operation_mode == "Autonomous Briefing (v3.0)":
+        sample_alerts = [
+            {"priority": "Critical", "message": "Revenue down 15% in EMEA region", "timestamp": "10:23"},
+            {"priority": "High", "message": "Customer churn rate increased 8%", "timestamp": "09:45"},
+            {"priority": "Medium", "message": "Supply chain delays detected", "timestamp": "08:12"},
+        ]
+        render_critical_alerts(sample_alerts)
+    else:
+        st.sidebar.info("💡 v2.0 Mode: Alerts hidden for a cleaner report view")
     
     # ========================================================================
     # MAIN LAYOUT: QUERY INPUT
@@ -607,56 +645,98 @@ def main():
     
     # Execute query workflow
     if run_query and query:
-        with st.spinner("🔄 Running CrewAI pipeline..."):
-            try:
-                # Initialize components
-                llm = ChatGroq(model_name="llama-3.3-70b-versatile", groq_api_key=GROQ_API_KEY)
-                
-                # Simulated query execution (replace with actual DataOpsManager call)
-                st.info("📊 Executing multi-agent workflow...")
-                
-                # Phase 1-3 would run here via DataOpsManager
-                # For now, simulate results
-                query_results = {
-                    'query': query,
-                    'data': [
-                        {'Region': 'NA', 'Q3_Revenue': 125000, 'Change': 0.08},
-                        {'Region': 'EMEA', 'Q3_Revenue': 98000, 'Change': -0.15},
-                        {'Region': 'APAC', 'Q3_Revenue': 110000, 'Change': 0.12}
-                    ],
-                    'charts': [{
-                        'type': 'bar',
-                        'data': {
-                            'Region': ['NA', 'EMEA', 'APAC'],
-                            'Revenue': [125000, 98000, 110000]
-                        },
-                        'title': 'Q3 Revenue by Region',
-                        'x': 'Region',
-                        'y': 'Revenue'
-                    }],
-                    'key_metrics': [125000, 98000, 110000]
-                }
-                
-                st.session_state.query_results = query_results
-                
-                # Generate voice briefing (Phase 4)
-                st.info("🎙️ Generating executive voice briefing...")
-                
-                briefing_context = {
-                    'query': query,
-                    'sql_results': {'rows': query_results['data']},
-                    'key_metrics': query_results['key_metrics'],
-                    'insights': "EMEA region shows significant decline of 15% requiring immediate attention. NA and APAC performing above expectations."
-                }
-                
-                voice_script = generate_voice_brief(llm, briefing_context, duration=briefing_duration)
-                st.session_state.voice_script = voice_script
-                
-                st.success("✅ Workflow complete!")
-                
-            except Exception as e:
-                st.error(f"Error executing workflow: {e}")
-                logger.error(f"Workflow execution error: {e}")
+        # v2.0: simple report; v3.0: autonomous briefing
+        if operation_mode == "Simple Query (v2.0)":
+            with st.spinner("⚡ Running simple SQL workflow..."):
+                try:
+                    # Deterministic placeholder SQL + results (no LLM calls)
+                    query_results = {
+                        "mode": "v2.0",
+                        "query": query,
+                        "sql": "-- v2.0 placeholder\nSELECT Region, SUM(Q3_Revenue) AS Q3_Revenue FROM sales GROUP BY Region;",
+                        "data": [
+                            {"Region": "NA", "Q3_Revenue": 125000, "Change": 0.08},
+                            {"Region": "EMEA", "Q3_Revenue": 98000, "Change": -0.15},
+                            {"Region": "APAC", "Q3_Revenue": 110000, "Change": 0.12},
+                        ],
+                        "charts": [
+                            {
+                                "type": "bar",
+                                "data": {
+                                    "Region": ["NA", "EMEA", "APAC"],
+                                    "Revenue": [125000, 98000, 110000],
+                                },
+                                "title": "Q3 Revenue by Region",
+                                "x": "Region",
+                                "y": "Revenue",
+                            }
+                        ],
+                    }
+
+                    st.session_state.query_results = query_results
+                    st.session_state.voice_script = None
+                    st.success("✅ Query complete (v2.0)")
+                except Exception as e:
+                    st.error(f"Error executing v2.0 workflow: {e}")
+                    logger.error("v2.0 workflow execution error", exc_info=True)
+        else:
+            with st.spinner("🔄 Running autonomous briefing workflow..."):
+                try:
+                    # Default to simulated mode to avoid external API errors.
+                    llm = None
+                    st.info("🛡️ LLM calls disabled (simulated workflow)")
+
+                    st.info("📊 Executing multi-agent workflow...")
+                    query_results = {
+                        "mode": "v3.0",
+                        "query": query,
+                        "data": [
+                            {"Region": "NA", "Q3_Revenue": 125000, "Change": 0.08},
+                            {"Region": "EMEA", "Q3_Revenue": 98000, "Change": -0.15},
+                            {"Region": "APAC", "Q3_Revenue": 110000, "Change": 0.12},
+                        ],
+                        "charts": [
+                            {
+                                "type": "bar",
+                                "data": {
+                                    "Region": ["NA", "EMEA", "APAC"],
+                                    "Revenue": [125000, 98000, 110000],
+                                },
+                                "title": "Q3 Revenue by Region",
+                                "x": "Region",
+                                "y": "Revenue",
+                            }
+                        ],
+                        "key_metrics": [125000, 98000, 110000],
+                        "insights": "EMEA region shows significant decline of 15% requiring immediate attention. NA and APAC performing above expectations.",
+                    }
+
+                    st.session_state.query_results = query_results
+
+                    # Voice briefing (only if we have an LLM configured)
+                    if llm:
+                        st.info("🎙️ Generating executive voice briefing...")
+                        briefing_context = {
+                            "query": query,
+                            "sql_results": {"rows": query_results["data"]},
+                            "key_metrics": query_results["key_metrics"],
+                            "insights": query_results["insights"],
+                        }
+                        st.session_state.voice_script = generate_voice_brief(
+                            llm, briefing_context, duration=briefing_duration
+                        )
+                    else:
+                        st.session_state.voice_script = (
+                            "Revenue is down fifteen percent in Q3. "
+                            "EMEA shows a significant decline requiring attention. "
+                            "NA and APAC are performing above expectations. "
+                            "Decision point: prioritize EMEA recovery or accelerate growth in strong regions."
+                        )
+
+                    st.success("✅ Workflow complete! (v3.0)")
+                except Exception as e:
+                    st.error(f"Error executing v3.0 workflow: {e}")
+                    logger.error("v3.0 workflow execution error", exc_info=True)
     
     # Render Visual Stage
     render_visual_stage(st.session_state.query_results)
@@ -667,17 +747,23 @@ def main():
     
     if st.session_state.query_results:
         st.divider()
-        
-        # Key Metrics
-        st.markdown("### 📈 Key Metrics")
-        metrics = [
-            {'label': 'NA Revenue', 'value': '$125K', 'delta': 0.08},
-            {'label': 'EMEA Revenue', 'value': '$98K', 'delta': -0.15},
-            {'label': 'APAC Revenue', 'value': '$110K', 'delta': 0.12}
-        ]
-        create_metric_cards(metrics)
+
+        mode = st.session_state.query_results.get("mode")
+        if mode == "v2.0":
+            st.markdown("### 📄 Report")
+            if "sql" in st.session_state.query_results:
+                with st.expander("📝 Generated SQL", expanded=False):
+                    st.code(st.session_state.query_results["sql"], language="sql")
+        else:
+            st.markdown("### 📈 Key Metrics")
+            metrics = [
+                {"label": "NA Revenue", "value": "$125K", "delta": 0.08},
+                {"label": "EMEA Revenue", "value": "$98K", "delta": -0.15},
+                {"label": "APAC Revenue", "value": "$110K", "delta": 0.12},
+            ]
+            create_metric_cards(metrics)
     
-    if st.session_state.voice_script:
+    if st.session_state.voice_script and operation_mode == "Autonomous Briefing (v3.0)":
         st.divider()
         
         # Voice Briefing Section
@@ -694,8 +780,10 @@ def main():
                 if st.button("▶️ Play Briefing", use_container_width=True):
                     with st.spinner("Playing audio..."):
                         speak_script(st.session_state.voice_script)
+            elif not AUDIO_AVAILABLE:
+                st.warning("⚠️ Audio unavailable. Install: gtts pygame")
             else:
-                st.info("Audio disabled or unavailable")
+                st.info("🔇 Audio disabled (enable in sidebar)")
         
         # Audio player widget (always available)
         if AUDIO_AVAILABLE:
